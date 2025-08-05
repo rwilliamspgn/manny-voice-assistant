@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .assistant-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .assistant-title {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .assistant-subtitle {
+            font-size: 1.1em;
+            opacity: 0.8;
+            margin-bottom: 40px;
+        }
+
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .voice-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .voice-button.listening {
+            animation: pulse 1.5s infinite;
+            background: linear-gradient(45deg, #ff4757, #ff3838);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .status {
+            font-size: 1.1em;
+            margin-bottom: 20px;
+            min-height: 30px;
+            opacity: 0.9;
+        }
+
+        .response {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .commands {
+            text-align: left;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .commands h3 {
+            margin-bottom: 15px;
+            color: #4ecdc4;
+            text-align: center;
+        }
+
+        .commands ul {
+            list-style: none;
+        }
+
+        .commands li {
+            margin-bottom: 8px;
+            padding-left: 15px;
+            position: relative;
+        }
+
+        .commands li::before {
+            content: "•";
+            color: #ff6b6b;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .mic-icon {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="assistant-container">
+        <h1 class="assistant-title">Manny</h1>
+        <p class="assistant-subtitle">Your AI-powered voice assistant</p>
+        
+        <button class="voice-button" id="voiceButton">
+            <div class="mic-icon">🎤</div>
+            <div>Click to Talk</div>
+        </button>
+        
+        <div class="status" id="status">Click the button and start speaking!</div>
+        
+        <div class="response" id="response">Hello! I'm Manny, your voice assistant. How can I help you today?</div>
+        
+        <div class="commands">
+            <h3>Try saying:</h3>
+            <ul>
+                <li>"Hey Manny, what time is it?"</li>
+                <li>"Manny, what's the weather like?"</li>
+                <li>"Manny, tell me a joke"</li>
+                <li>"Hey Manny, what's 15 plus 27?"</li>
+                <li>"Manny, set a timer for 5 minutes"</li>
+                <li>"Hey Manny, what's the capital of France?"</li>
+                <li>"Manny, play some music"</li>
+                <li>"Manny, what's the date today?"</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        class VoiceAssistant {
+            constructor() {
+                this.recognition = null;
+                this.synthesis = window.speechSynthesis;
+                this.isListening = false;
+                this.timers = new Map();
+                
+                this.initElements();
+                this.initSpeechRecognition();
+                this.bindEvents();
+            }
+
+            initElements() {
+                this.voiceButton = document.getElementById('voiceButton');
+                this.status = document.getElementById('status');
+                this.response = document.getElementById('response');
+            }
+
+            initSpeechRecognition() {
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    this.recognition = new SpeechRecognition();
+                    
+                    this.recognition.continuous = false;
+                    this.recognition.interimResults = false;
+                    this.recognition.lang = 'en-US';
+                    
+                    this.recognition.onstart = () => {
+                        this.isListening = true;
+                        this.voiceButton.classList.add('listening');
+                        this.status.textContent = 'Listening... Speak now!';
+                        this.voiceButton.innerHTML = '<div class="mic-icon">🔴</div><div>Listening...</div>';
+                    };
+                    
+                    this.recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        this.status.textContent = `You said: "${transcript}"`;
+                        this.processCommand(transcript);
+                    };
+                    
+                    this.recognition.onerror = (event) => {
+                        this.status.textContent = 'Sorry, I couldn\'t understand that. Try again!';
+                        this.response.textContent = 'Error: ' + event.error;
+                        this.response.classList.add('error');
+                        this.resetButton();
+                    };
+                    
+                    this.recognition.onend = () => {
+                        this.resetButton();
+                    };
+                } else {
+                    this.status.textContent = 'Speech recognition not supported in this browser';
+                    this.response.textContent = 'Please use Chrome, Edge, or Safari for voice features';
+                    this.response.classList.add('error');
+                }
+            }
+
+            bindEvents() {
+                this.voiceButton.addEventListener('click', () => {
+                    if (this.recognition) {
+                        if (this.isListening) {
+                            this.recognition.stop();
+                        } else {
+                            this.startListening();
+                        }
+                    }
+                });
+            }
+
+            startListening() {
+                if (this.recognition && !this.isListening) {
+                    this.response.classList.remove('error');
+                    this.recognition.start();
+                }
+            }
+
+            resetButton() {
+                this.isListening = false;
+                this.voiceButton.classList.remove('listening');
+                this.voiceButton.innerHTML = '<div class="mic-icon">🎤</div><div>Click to Talk</div>';
+            }
+
+            speak(text) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.8;
+                utterance.pitch = 0.8; // Lower pitch for more masculine voice
+                utterance.volume = 1;
+                
+                // Try to use a male voice if available
+                const voices = this.synthesis.getVoices();
+                const maleVoice = voices.find(voice => 
+                    voice.name.includes('Male') || 
+                    voice.name.includes('Daniel') ||
+                    voice.name.includes('Alex') ||
+                    voice.name.includes('Fred') ||
+                    voice.name.includes('David') ||
+                    voice.gender === 'male' ||
+                    voice.name.toLowerCase().includes('male')
+                );
+                
+                if (maleVoice) {
+                    utterance.voice = maleVoice;
+                }
+                
+                this.synthesis.speak(utterance);
+            }
+
+            processCommand(command) {
+                const lowerCommand = command.toLowerCase();
+                let response = '';
+
+                // Check if the command starts with "Hey Manny" or "Manny"
+                const isAddressingManny = lowerCommand.includes('manny') || 
+                                        lowerCommand.includes('hey manny') ||
+                                        lowerCommand.includes('hi manny');
+
+                // If not addressing Manny specifically, check for general wake words
+                const hasWakeWord = isAddressingManny || 
+                                  lowerCommand.startsWith('hey ') ||
+                                  lowerCommand.startsWith('hi ') ||
+                                  lowerCommand.includes('hello');
+
+                // If no wake word and not a direct command, suggest using "Manny"
+                if (!hasWakeWord && !this.isDirectCommand(lowerCommand)) {
+                    response = "Hi! I'm Manny. You can get my attention by saying 'Hey Manny' or 'Manny' before your request.";
+                    this.displayResponse(response);
+                    this.speak(response);
+                    return;
+                }
+
+                // Remove wake words for processing
+                let cleanCommand = lowerCommand
+                    .replace(/hey manny,?/g, '')
+                    .replace(/hi manny,?/g, '')
+                    .replace(/manny,?/g, '')
+                    .replace(/hey,?/g, '')
+                    .replace(/hi,?/g, '')
+                    .trim();
+
+                // Time commands
+                if (cleanCommand.includes('time')) {
+                    const now = new Date();
+                    const timeString = now.toLocaleTimeString();
+                    response = `The current time is ${timeString}`;
+                }
+                // Date commands
+                else if (cleanCommand.includes('date') || cleanCommand.includes('today')) {
+                    const now = new Date();
+                    const dateString = now.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    response = `Today is ${dateString}`;
+                }
+                // Weather commands
+                else if (cleanCommand.includes('weather')) {
+                    response = "I'd love to check the weather for you, but I need internet access for real-time data. Try asking your device's built-in weather app!";
+                }
+                // Math calculations
+                else if (cleanCommand.includes('plus') || cleanCommand.includes('minus') || 
+                         cleanCommand.includes('times') || cleanCommand.includes('divided') ||
+                         cleanCommand.includes('calculate') || cleanCommand.includes('what is')) {
+                    response = this.calculateMath(cleanCommand);
+                }
+                // Timer commands
+                else if (cleanCommand.includes('timer') || cleanCommand.includes('remind me')) {
+                    response = this.setTimer(cleanCommand);
+                }
+                // Jokes
+                else if (cleanCommand.includes('joke') || cleanCommand.includes('funny')) {
+                    const jokes = [
+                        "Why don't scientists trust atoms? Because they make up everything!",
+                        "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+                        "Why don't eggs tell jokes? They'd crack each other up!",
+                        "What do you call a fake noodle? An impasta!",
+                        "Why did the scarecrow win an award? He was outstanding in his field!"
+                    ];
+                    response = jokes[Math.floor(Math.random() * jokes.length)];
+                }
+                // Music commands
+                else if (cleanCommand.includes('music') || cleanCommand.includes('song')) {
+                    response = "I can't play music directly, but I'd recommend opening your favorite music app like Spotify, Apple Music, or YouTube Music!";
+                }
+                // Capital cities
+                else if (cleanCommand.includes('capital')) {
+                    response = this.getCapital(cleanCommand);
+                }
+                // Greetings
+                else if (cleanCommand.includes('hello') || cleanCommand.includes('hi') || 
+                         cleanCommand.includes('hey') || cleanCommand === '') {
+                    response = "Hello! I'm Manny, your voice assistant. How can I help you today?";
+                }
+                // Default response
+                else {
+                    response = "I heard you, but I'm not sure how to help with that. Try asking about the time, weather, or tell me to tell you a joke!";
+                }
+
+                this.displayResponse(response);
+                this.speak(response);
+            }
+
+            isDirectCommand(command) {
+                const directCommands = ['time', 'date', 'weather', 'joke', 'music', 'hello', 'hi'];
+                return directCommands.some(cmd => command.includes(cmd)) ||
+                       command.includes('what is') ||
+                       command.includes('calculate') ||
+                       command.includes('timer') ||
+                       command.includes('capital');
+            }
+
+            calculateMath(command) {
+                try {
+                    // Extract numbers and operations
+                    const words = command.split(' ');
+                    let numbers = [];
+                    let operation = '';
+
+                    for (let i = 0; i < words.length; i++) {
+                        const word = words[i];
+                        const num = parseFloat(word);
+                        
+                        if (!isNaN(num)) {
+                            numbers.push(num);
+                        } else if (word.includes('plus') || word === '+') {
+                            operation = 'add';
+                        } else if (word.includes('minus') || word === '-') {
+                            operation = 'subtract';
+                        } else if (word.includes('times') || word.includes('multiply') || word === '*') {
+                            operation = 'multiply';
+                        } else if (word.includes('divided') || word === '/') {
+                            operation = 'divide';
+                        }
+                    }
+
+                    if (numbers.length >= 2) {
+                        let result;
+                        switch (operation) {
+                            case 'add':
+                                result = numbers[0] + numbers[1];
+                                break;
+                            case 'subtract':
+                                result = numbers[0] - numbers[1];
+                                break;
+                            case 'multiply':
+                                result = numbers[0] * numbers[1];
+                                break;
+                            case 'divide':
+                                result = numbers[0] / numbers[1];
+                                break;
+                            default:
+                                return "I can help with math! Try saying something like 'what is 15 plus 27?'";
+                        }
+                        return `${numbers[0]} ${operation === 'add' ? 'plus' : operation === 'subtract' ? 'minus' : operation === 'multiply' ? 'times' : 'divided by'} ${numbers[1]} equals ${result}`;
+                    }
+                } catch (error) {
+                    return "I had trouble with that calculation. Try asking something like 'what is 10 plus 5?'";
+                }
+                
+                return "I can help with math! Try saying something like 'what is 15 plus 27?'";
+            }
+
+            setTimer(command) {
+                const match = command.match(/(\d+)\s*(minute|minutes|min|second|seconds|sec)/i);
+                if (match) {
+                    const duration = parseInt(match[1]);
+                    const unit = match[2].toLowerCase();
+                    const milliseconds = unit.startsWith('min') ? duration * 60000 : duration * 1000;
+                    
+                    const timerId = Date.now();
+                    setTimeout(() => {
+                        this.speak(`Time's up! Your ${duration} ${unit} timer is finished.`);
+                        this.displayResponse(`⏰ Timer finished! Your ${duration} ${unit} timer is up.`);
+                    }, milliseconds);
+                    
+                    return `Timer set for ${duration} ${unit}. I'll let you know when it's done!`;
+                }
+                return "I can set a timer for you! Try saying 'set a timer for 5 minutes' or 'remind me in 30 seconds'.";
+            }
+
+            getCapital(command) {
+                const capitals = {
+                    'france': 'Paris',
+                    'germany': 'Berlin',
+                    'italy': 'Rome',
+                    'spain': 'Madrid',
+                    'uk': 'London',
+                    'united kingdom': 'London',
+                    'england': 'London',
+                    'usa': 'Washington D.C.',
+                    'united states': 'Washington D.C.',
+                    'america': 'Washington D.C.',
+                    'japan': 'Tokyo',
+                    'china': 'Beijing',
+                    'russia': 'Moscow',
+                    'canada': 'Ottawa',
+                    'australia': 'Canberra',
+                    'brazil': 'Brasília',
+                    'india': 'New Delhi'
+                };
+
+                for (const [country, capital] of Object.entries(capitals)) {
+                    if (command.includes(country)) {
+                        return `The capital of ${country.charAt(0).toUpperCase() + country.slice(1)} is ${capital}.`;
+                    }
+                }
+
+                return "I know the capitals of many countries! Try asking about France, Germany, Japan, or the United States.";
+            }
+
+            displayResponse(text) {
+                this.response.textContent = text;
+                this.response.classList.remove('error');
+                this.status.textContent = 'Response ready!';
+            }
+        }
+
+        // Initialize the voice assistant when the page loads
+        window.addEventListener('load', () => {
+            new VoiceAssistant();
+        });
+    </script>
+</body>
+</html>
